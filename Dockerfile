@@ -17,9 +17,15 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY . .
+# Copier d'abord les fichiers nécessaires
+COPY build.sh .
+COPY minesec_bot.ipynb .
+COPY requirements.txt .
 
-# Installer les dépendances Python (y compris nbconvert)
+# Installer les dépendances Python
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Copier le reste des fichiers
+COPY . .
 
 CMD ["bash", "build.sh"]

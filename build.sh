@@ -5,8 +5,10 @@ set -e
 echo "🔄 Conversion du notebook en script Python..."
 jupyter nbconvert --to script minesec_bot.ipynb --output-dir=. --output=minesec_bot
 
-# Installation des dépendances
-echo "🐍 Installation des dépendances Python..."
+# Renommer le fichier généré pour correspondre à ce que vous utilisez
+mv minesec_bot.py minesec_bot.py || true
+
+# Installation des dépendances (au cas où)
 pip install --upgrade pip
 pip install -r requirements.txt
 
