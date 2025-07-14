@@ -4,3 +4,4 @@ pypandoc
 ipykernel
 nbconvert
 jupyter-client
+jupyter
