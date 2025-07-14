@@ -13,14 +13,13 @@ RUN apt-get update && apt-get install -y \
     lmodern \
     python3-pip \
     python3-venv \
-    jupyter-core \
-    nbconvert \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY . .
 
+# Installer les dépendances Python (y compris nbconvert)
 RUN pip install --no-cache-dir -r requirements.txt
 
 CMD ["bash", "build.sh"]
