@@ -1,15 +1,20 @@
 #!/bin/bash
-# Installer les dépendances système
+# 1. Install Python kernel properly
+python -m pip install ipykernel
+python -m ipykernel install --name python3 --user
+
+# 2. Install system dependencies
 apt-get update
-apt-get install -y pandoc texlive-xetex texlive-latex-base texlive-latex-extra dvipng cm-super fonts-liberation fonts-dejavu
+apt-get install -y \
+    pandoc \
+    texlive-xetex \
+    texlive-latex-base \
+    texlive-latex-extra \
+    fonts-liberation \
+    fonts-dejavu
 
-# Configurer les polices
-mkdir -p /usr/share/fonts/truetype/custom
-ln -s /usr/share/fonts/truetype/liberation /usr/share/fonts/truetype/custom/
-fc-cache -f -v
-
-# Installer les dépendances Python
+# 3. Install Python packages
 pip install -r requirements.txt
 
-# Convertir le notebook en script (sécurité)
-jupyter nbconvert --to script minesec_bot.ipynb
+# 4. Fix kernel permission
+chmod -R 777 /usr/local/share/jupyter

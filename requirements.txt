@@ -1,5 +1,6 @@
 python-telegram-bot==13.7
 openai
 pypandoc
-python-dotenv
+ipykernel
 nbconvert
+jupyter-client
