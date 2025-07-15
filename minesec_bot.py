@@ -20,7 +20,12 @@ from datetime import datetime
 # Imports de la librairie python-telegram-bot
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, ParseMode
 from telegram.ext import (
-    Updater, CommandHandler, MessageHandler, Filters, CallbackContext, ConversationHandler
+    Application,  # Nouvelle classe remplaçant Updater
+    CommandHandler,
+    MessageHandler,
+    filters,  # Note: 'filters' minuscule dans la nouvelle API
+    ContextTypes,  # Nouveau type de contexte
+    ConversationHandler
 )
 # =======================================================================
 # FIN DE LA SECTION 1 IMPORTS
@@ -47,6 +52,23 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# CONFIGURATION APPLICATION (Nouvelle méthode recommandée)
+def create_application():
+    """Crée et configure l'application du bot"""
+    # Note: 'ApplicationBuilder' est la nouvelle façon de faire
+    application = (
+        Application.builder()
+        .token(TELEGRAM_TOKEN)
+        .concurrent_updates(True)  # Permet plusieurs utilisateurs
+        .post_init(post_init)  # Optionnel pour les tâches de démarrage
+        .build()
+    )
+    return application
+
+async def post_init(application: Application):
+    """Fonction exécutée après l'initialisation"""
+    logging.info("Application bot initialisée avec succès")
 
 # =======================================================================
 # FIN DE LA SECTION 2 : CONFIGURATION ET CLÉS API
@@ -414,16 +436,16 @@ mainfont: Liberation Serif
 
 
 # --- Fonctions de démarrage ---
-def start(update: Update, context: CallbackContext) -> int:
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     keyboard = [['Français 🇫🇷'], ['English 🇬🇧']]
-    update.message.reply_text(
+    await update.message.reply_text(
         "Bonjour! Je suis MINESEC IA. Choisissez votre langue.\n\n"
         "Hello! I am MINESEC IA. Please choose your language.",
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     )
     return SELECT_LANG
 
-def select_lang(update: Update, context: CallbackContext) -> int:
+async def select_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     lang_choice = update.message.text
     if 'Français' in lang_choice:
         context.user_data['lang'] = 'fr'
@@ -434,26 +456,24 @@ def select_lang(update: Update, context: CallbackContext) -> int:
         options = [['Prepare a lesson'], ['Create an assessment (soon)']]
         reply_text = "Language selected: English. What would you like to do?"
     else:
-        update.message.reply_text("Choix invalide. /start pour recommencer.")
+        await update.message.reply_text("Choix invalide. /start pour recommencer.")
         return ConversationHandler.END
-    update.message.reply_text(reply_text, reply_markup=ReplyKeyboardMarkup(options, one_time_keyboard=True))
+    await update.message.reply_text(reply_text, reply_markup=ReplyKeyboardMarkup(options, one_time_keyboard=True))
     return SELECT_OPTION
 
 
 # --- Nouveau flux guidé par menus ---
 
-def ask_for_subsystem(update: Update, context: CallbackContext) -> int:
-    """Demande le sous-système d'enseignement (ESG/EST)."""
+async def ask_for_subsystem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data['lesson_info'] = {}
     lang = context.user_data.get('lang', 'fr')
     subsystem_list = SUBSYSTEME_FR if lang == 'fr' else SUBSYSTEME_EN
     keyboard = [[s] for s in subsystem_list]
     reply_text = "Veuillez sélectionner le sous-système d'enseignement :" if lang == 'fr' else "Please select the educational subsystem:"
-    update.message.reply_text(reply_text, reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True))
+    await update.message.reply_text(reply_text, reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True))
     return CHOOSE_SUBSYSTEM
 
-def ask_for_classe(update: Update, context: CallbackContext) -> int:
-    """Affiche le menu de sélection de la classe."""
+async def ask_for_classe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_input = update.message.text
     lang = context.user_data.get('lang', 'fr')
     subsystem_code = 'esg' if 'général' in user_input.lower() or 'general' in user_input.lower() else 'est'
@@ -461,113 +481,105 @@ def ask_for_classe(update: Update, context: CallbackContext) -> int:
 
     if subsystem_code == 'est':
         reply_text = "Le sous-système Technique est en cours de développement. Veuillez redémarrer avec /start et choisir ESG."
-        update.message.reply_text(reply_text, reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text(reply_text, reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
 
     classes_list = CLASSES[lang][subsystem_code]
     other_option = AUTRE_OPTION_FR if lang == 'fr' else AUTRE_OPTION_EN
     keyboard = build_keyboard(classes_list, other_option)
     reply_text = "Veuillez choisir une classe :" if lang == 'fr' else "Please choose a class:"
-    update.message.reply_text(reply_text, reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
+    await update.message.reply_text(reply_text, reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
     return CHOOSE_CLASSE
 
-def handle_classe_choice(update: Update, context: CallbackContext) -> int:
-    """Gère le choix de la classe et demande la matière."""
+async def handle_classe_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_input = update.message.text
     lang = context.user_data.get('lang', 'fr')
     other_option = AUTRE_OPTION_FR if lang == 'fr' else AUTRE_OPTION_EN
 
     if user_input == other_option:
         reply_text = "Veuillez taper le nom de la classe :" if lang == 'fr' else "Please type the class name:"
-        update.message.reply_text(reply_text, reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text(reply_text, reply_markup=ReplyKeyboardRemove())
         return MANUAL_CLASSE
     else:
         context.user_data['lesson_info']['classe'] = user_input
-        return ask_for_matiere(update, context)
-
-def handle_manual_classe(update: Update, context: CallbackContext) -> int:
-    """Stocke la classe manuelle et demande la matière."""
+        return await ask_for_matiere(update, context)
+    
+    
+async def handle_manual_classe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data['lesson_info']['classe'] = update.message.text
-    return ask_for_matiere(update, context)
+    return await ask_for_matiere(update, context)
 
-def ask_for_matiere(update: Update, context: CallbackContext) -> int:
-    """Affiche le menu de sélection de la matière."""
+
+async def ask_for_matiere(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     lang = context.user_data.get('lang', 'fr')
     subsystem_code = context.user_data.get('subsystem', 'esg')
     matieres_list = MATIERES[lang][subsystem_code]
     other_option = AUTRE_OPTION_FR if lang == 'fr' else AUTRE_OPTION_EN
     keyboard = build_keyboard(matieres_list, other_option)
     reply_text = "Choisissez une matière :" if lang == 'fr' else "Choose a subject:"
-    update.message.reply_text(reply_text, reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
+    await update.message.reply_text(reply_text, reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
     return CHOOSE_MATIERE
 
-def handle_matiere_choice(update: Update, context: CallbackContext) -> int:
-    """Gère le choix de la matière."""
+
+async def handle_matiere_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_input = update.message.text
     lang = context.user_data.get('lang', 'fr')
     other_option = AUTRE_OPTION_FR if lang == 'fr' else AUTRE_OPTION_EN
 
     if user_input == other_option:
         reply_text = "Veuillez taper le nom de la matière :" if lang == 'fr' else "Please type the subject name:"
-        update.message.reply_text(reply_text, reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text(reply_text, reply_markup=ReplyKeyboardRemove())
         return MANUAL_MATIERE
     else:
         context.user_data['lesson_info']['module'] = user_input
-        return ask_for_lecon(update, context)
-
-def handle_manual_matiere(update: Update, context: CallbackContext) -> int:
-    """Stocke la matière manuelle et demande la leçon."""
+        return await ask_for_lecon(update, context)
+    
+async def handle_manual_matiere(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data['lesson_info']['module'] = update.message.text
-    return ask_for_lecon(update, context)
+    return await ask_for_lecon(update, context)
 
-def ask_for_lecon(update: Update, context: CallbackContext) -> int:
-    """Demande à l'utilisateur de taper le titre de la leçon."""
+async def ask_for_lecon(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     lang = context.user_data.get('lang', 'fr')
-    # Pour l'instant, la liste des leçons est manuelle. Le RAG viendra ici.
     reply_text = "Quel est le titre exact de la leçon ?" if lang == 'fr' else "What is the exact title of the lesson?"
-    update.message.reply_text(reply_text, reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text(reply_text, reply_markup=ReplyKeyboardRemove())
     return MANUAL_LECON
 
-def ask_for_langue_contenu(update: Update, context: CallbackContext) -> int:
-    """Demande la langue de rédaction du contenu."""
+async def ask_for_langue_contenu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data['lesson_info']['lecon'] = update.message.text
     lang = context.user_data.get('lang', 'fr')
     other_option = AUTRE_OPTION_FR if lang == 'fr' else AUTRE_OPTION_EN
     keyboard = build_keyboard(LANGUES_CONTENU, other_option)
     reply_text = "En quelle langue le contenu de cette leçon doit-il être rédigé ?" if lang == 'fr' else "In which language should the content of this lesson be written?"
-    update.message.reply_text(reply_text, reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
+    await update.message.reply_text(reply_text, reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
     return CHOOSE_LANGUE_CONTENU
 
-def ask_for_syllabus(update: Update, context: CallbackContext) -> int:
+async def ask_for_syllabus(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_input = update.message.text
     lang = context.user_data.get('lang', 'fr')
     other_option = AUTRE_OPTION_FR if lang == 'fr' else AUTRE_OPTION_EN
 
     if user_input == other_option:
         reply_text = "Veuillez taper la langue :" if lang == 'fr' else "Please type the language:"
-        update.message.reply_text(reply_text, reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text(reply_text, reply_markup=ReplyKeyboardRemove())
         return MANUAL_LANGUE
     else:
         context.user_data['lesson_info']['langue_contenu'] = user_input
-        # *** TRADUCTION CORRIGÉE ICI ***
         reply_text = "Enfin, veuillez copier-coller ici l'extrait du syllabus." if lang == 'fr' else "Finally, please copy and paste the syllabus extract here."
-        update.message.reply_text(reply_text, reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text(reply_text, reply_markup=ReplyKeyboardRemove())
         return GET_SYLLABUS
 
-def handle_manual_lang(update: Update, context: CallbackContext) -> int:
+async def handle_manual_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data['lesson_info']['langue_contenu'] = update.message.text
     lang = context.user_data.get('lang', 'fr')
-    # *** TRADUCTION CORRIGÉE ICI ***
     reply_text = "Enfin, veuillez copier-coller ici l'extrait du syllabus." if lang == 'fr' else "Finally, please copy and paste the syllabus extract here."
-    update.message.reply_text(reply_text, reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text(reply_text, reply_markup=ReplyKeyboardRemove())
     return GET_SYLLABUS
 
 
 # --- FONCTION 8 : LA GRANDE FINALE - GÉNÉRATION ET ENVOI (VERSION FINALE CORRIGÉE) ---
 # La fonction `generate_lesson` reste la même, mais nous la renommons pour plus de clarté
 # --- FONCTION 8 : LA GRANDE FINALE - GÉNÉRATION ET ENVOI (VERSION CORRIGÉE ET FONCTIONNELLE) ---
-def generate_and_end(update: Update, context: CallbackContext) -> int:
-    # 1. On stocke la dernière information (le syllabus)
+async def generate_and_end(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data['lesson_info']['syllabus'] = update.message.text
     lang_interface = context.user_data.get('lang', 'fr')
     lang_contenu_input = context.user_data['lesson_info'].get('langue_contenu', 'Français').lower()
@@ -589,7 +601,7 @@ def generate_and_end(update: Update, context: CallbackContext) -> int:
                    "✅ Thank you! All information collected.\n\n"
                    "🧠 <b>Preparing your lesson plan...</b>\n\n"
                    "This may take one to two minutes.")
-    update.message.reply_text(wait_message, parse_mode=ParseMode.HTML)
+    await update.message.reply_text(wait_message, parse_mode=ParseMode.HTML)
 
     # 4. Préparation du prompt complet
     info = context.user_data['lesson_info']
@@ -622,80 +634,117 @@ def generate_and_end(update: Update, context: CallbackContext) -> int:
 
     # 6. Envoi d'un aperçu dans le chat
     apercu_message = "✅ Leçon générée ! Voici un aperçu. Le rendu final des formules sera dans le PDF." if lang_interface == 'fr' else "✅ Lesson generated! Here's a preview. Final formulas will be in the PDF."
-    update.message.reply_text(apercu_message)
+    await update.message.reply_text(apercu_message)
     
     preview_text = generated_content.split("<bilingual_data>")[0]
     for i in range(0, len(preview_text), 4096):
-        update.message.reply_text(preview_text[i:i+4096])
+        await update.message.reply_text(preview_text[i:i+4096])
 
     # 7. Génération et envoi du PDF (version corrigée)
     pdf_message = "<i>Génération du fichier PDF en cours...</i>" if lang_interface == 'fr' else "<i>Generating PDF file...</i>"
-    update.message.reply_text(pdf_message, parse_mode=ParseMode.HTML)
+    await update.message.reply_text(pdf_message, parse_mode=ParseMode.HTML)
     
     pdf_filename = f"Fiche_Lecon_{info.get('lecon', 'lecon').replace(' ', '_')}.pdf"
     
     if create_pdf_with_pandoc(generated_content, pdf_filename):
         try:
             with open(pdf_filename, 'rb') as doc:
-                update.message.reply_document(document=doc)
+                await update.message.reply_document(document=doc)
             os.remove(pdf_filename)  # Nettoyage du fichier après envoi
         except Exception as e:
             logger.error(f"Erreur lors de l'envoi du PDF: {str(e)}")
             error_msg = "Le PDF a été généré mais l'envoi a échoué. Voici le contenu texte:" if lang_interface == 'fr' else "PDF was generated but failed to send. Here's the text content:"
-            update.message.reply_text(error_msg)
-            update.message.reply_text(generated_content[:4000])
+            await update.message.reply_text(error_msg)
+            await update.message.reply_text(generated_content[:4000])
     else:
         error_msg = "Échec de la génération du PDF, envoi de la version texte à la place:" if lang_interface == 'fr' else "Failed to generate PDF, sending text version instead:"
-        update.message.reply_text(error_msg)
-        update.message.reply_text(generated_content[:4000])
+        await update.message.reply_text(error_msg)
+        await update.message.reply_text(generated_content[:4000])
 
     # 8. On termine la conversation.
     return ConversationHandler.END
 
-def cancel(update: Update, context: CallbackContext) -> int:
-    update.message.reply_text('Opération annulée.', reply_markup=ReplyKeyboardRemove())
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text('Opération annulée.', reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
 # =======================================================================
-# SECTION 6 : Lancement du Bot (CONFIGURATION FINALE DES ÉTATS)
+# SECTION 6 : Lancement du Bot (VERSION MODERNISÉE - API v20.x)
 # =======================================================================
-def main():
-    updater = Updater(TELEGRAM_TOKEN, use_context=True)
-    dp = updater.dispatcher
+async def main():
+    try:
+        # 1. Création de l'application avec la nouvelle API
+        application = (
+            Application.builder()
+            .token(TELEGRAM_TOKEN)
+            .concurrent_updates(True)  # Permet les requêtes parallèles
+            .post_init(post_init)     # Initialisation complémentaire
+            .build()
+        )
 
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
-        states={
-            SELECT_LANG: [MessageHandler(Filters.regex('^(Français 🇫🇷|English 🇬🇧)$'), select_lang)],
-            SELECT_OPTION: [MessageHandler(Filters.regex('^(Préparer une leçon|Prepare a lesson)$'), ask_for_subsystem)],
+        # 2. Configuration du ConversationHandler (même logique qu'avant)
+        conv_handler = ConversationHandler(
+            entry_points=[CommandHandler('start', start)],
+            states={
+                SELECT_LANG: [MessageHandler(filters.Regex('^(Français 🇫🇷|English 🇬🇧)$'), select_lang)],
+                SELECT_OPTION: [MessageHandler(filters.Regex('^(Préparer une leçon|Prepare a lesson)$'), ask_for_subsystem)],
+                
+                CHOOSE_SUBSYSTEM: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_for_classe)],
+                
+                CHOOSE_CLASSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_classe_choice)],
+                MANUAL_CLASSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_manual_classe)],
+                
+                CHOOSE_MATIERE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_matiere_choice)],
+                MANUAL_MATIERE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_manual_matiere)],
+                
+                MANUAL_LECON: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_for_langue_contenu)],
+                
+                CHOOSE_LANGUE_CONTENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_for_syllabus)],
+                MANUAL_LANGUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_manual_lang)],
+                
+                GET_SYLLABUS: [MessageHandler(filters.TEXT & ~filters.COMMAND, generate_and_end)],
+            },
+            fallbacks=[CommandHandler('cancel', cancel)],
+            per_user=True,        # Essentiel pour multi-utilisateurs
+            per_chat=True,        # Conservation des états par chat
+            conversation_timeout=300  # 5 minutes en secondes
+        )
 
-            CHOOSE_SUBSYSTEM: [MessageHandler(Filters.text & ~Filters.command, ask_for_classe)],
+        # 3. Ajout des handlers
+        application.add_handler(conv_handler)
+        
+        # 4. Gestion des erreurs
+        application.add_error_handler(error_handler)
 
-            CHOOSE_CLASSE: [MessageHandler(Filters.text & ~Filters.command, handle_classe_choice)],
-            MANUAL_CLASSE: [MessageHandler(Filters.text & ~Filters.command, handle_manual_classe)],
+        # 5. Lancement du bot
+        logger.info("✅ Bot MINESEC IA (v20 - API Moderne) démarré...")
+        await application.run_polling(
+            drop_pending_updates=True,  # Ignore les messages pendant le démarrage
+            allowed_updates=Update.ALL_TYPES
+        )
 
-            CHOOSE_MATIERE: [MessageHandler(Filters.text & ~Filters.command, handle_matiere_choice)],
-            MANUAL_MATIERE: [MessageHandler(Filters.text & ~Filters.command, handle_manual_matiere)],
+    except Exception as e:
+        logger.critical(f"ERREUR FATALE: {str(e)}")
+        raise
 
-            MANUAL_LECON: [MessageHandler(Filters.text & ~Filters.command, ask_for_langue_contenu)],
+async def post_init(application: Application):
+    """Tâches exécutées après l'initialisation"""
+    logger.info("Configuration post-init complétée")
 
-            CHOOSE_LANGUE_CONTENU: [MessageHandler(Filters.text & ~Filters.command, ask_for_syllabus)],
-            MANUAL_LANGUE: [MessageHandler(Filters.text & ~Filters.command, handle_manual_lang)],
-
-            GET_SYLLABUS: [MessageHandler(Filters.text & ~Filters.command, generate_and_end)],
-        },
-        fallbacks=[CommandHandler('cancel', cancel)],
-        conversation_timeout=5*60 # Timeout de 5 minutes
-    )
-
-    dp.add_handler(conv_handler)
-    updater.start_polling()
-    logger.info("✅ Bot MINESEC IA (v5 - Menus Stables) démarré...")
-    updater.idle()
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère toutes les erreurs non attrapées"""
+    logger.error(f"Erreur dans l'update {update}: {context.error}", exc_info=context.error)
+    
+    if update and update.effective_message:
+        await update.effective_message.reply_text(
+            "⚠️ Une erreur inattendue s'est produite. Veuillez réessayer plus tard.",
+            reply_markup=ReplyKeyboardRemove()
+        )
 
 if __name__ == '__main__':
-    # N'oubliez pas de copier votre logique de `generate_lesson` dans `generate_and_end`
-    main()
+    # Point d'entrée compatible avec asyncio
+    import asyncio
+    asyncio.run(main())
 
 # =======================================================================
 # FIN DE LA SECTION 6 : Lancement du Bot
