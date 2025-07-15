@@ -23,6 +23,7 @@ COPY minesec_bot.ipynb .
 COPY requirements.txt .
 
 # Installer les dépendances Python
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copier le reste des fichiers
