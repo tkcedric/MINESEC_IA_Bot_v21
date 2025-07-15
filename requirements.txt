@@ -1,8 +1,8 @@
+python-telegram-bot==13.7
 openai
 pypandoc
 ipykernel
 nbconvert
 jupyter-client
 jupyter
-python-telegram-bot==20.5  # Version moderne avec Application
 filelock==3.13.1  # Pour éviter les conflits
